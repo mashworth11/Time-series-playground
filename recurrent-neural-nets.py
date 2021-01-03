@@ -49,8 +49,8 @@ model = Sequential([
         Dense(1)])
 model.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
 model.fit(X_train, y_train, epochs = 10)
-y_pred_s2v = model.predict(X_valid)
-RMSE_s2v = np.sqrt(mean_squared_error(y_valid, y_pred_s2v)) # mse across batches for the next value in the sequence
+y_val_s2v = model.predict(X_valid)
+RMSE_s2v = np.sqrt(mean_squared_error(y_valid, y_val_s2v)) # mse across batches for the next value in the sequence
 print(f'Validation score: {RMSE_s2v}')
 
 
@@ -78,11 +78,11 @@ model_SRRN = Sequential([
              TimeDistributed(Dense(1))]) # apply dense to every timestep in the sequence
 model_SRRN.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
 model_SRRN.fit(X_train, Y_train, epochs = 10)
-y_pred_s2s = model_SRRN.predict(X_valid)
-y_pred_s2s = y_pred_s2s[:,:,0]
-RMSE_s2s = np.sqrt(mean_squared_error(y_valid, y_pred_s2s[:,-1]))
+y_val_s2s = model_SRRN.predict(X_valid)
+y_val_s2s = y_val_s2s[:,:,0]
+RMSE_s2s = np.sqrt(mean_squared_error(y_valid, y_val_s2s[:,-1]))
 print(f'Validation score for last timestep: {RMSE_s2s}')
-RMSE_s2s = np.sqrt(mean_squared_error(Y_valid.ravel(), y_pred_s2s.ravel()))
+RMSE_s2s = np.sqrt(mean_squared_error(Y_valid.ravel(), y_val_s2s.ravel()))
 print(f'Validation score across all timesteps: {RMSE_s2s}')
 
 # viz
@@ -109,9 +109,9 @@ y_train_lstm_s2s = model_LSTM.predict(X_train)
 y_train_lstm_s2s = y_train_lstm_s2s[:,:,0]
 RMSE_lstm_s2s = np.sqrt(mean_squared_error(Y_train.ravel(), y_train_lstm_s2s.ravel()))
 print(f'Training score across all timesteps: {RMSE_lstm_s2s}')
-y_pred_lstm_s2s = model_LSTM.predict(X_valid)
-y_pred_lstm_s2s = y_pred_lstm_s2s[:,:,0]
-RMSE_lstm_s2s = np.sqrt(mean_squared_error(Y_valid.ravel(), y_pred_lstm_s2s.ravel()))
+y_val_lstm_s2s = model_LSTM.predict(X_valid)
+y_val_lstm_s2s = y_val_lstm_s2s[:,:,0]
+RMSE_lstm_s2s = np.sqrt(mean_squared_error(Y_valid.ravel(), y_val_lstm_s2s.ravel()))
 print(f'Validation score across all timesteps: {RMSE_lstm_s2s}')
 
 # viz
@@ -131,10 +131,10 @@ ax.set_title('Predictions with groundtruth inputs')
 # i.e. Repeating the input vector or iteratively
 
 # (1) Repeating the input vector
-X_valid_msa1 = X_valid[:, 0, np.newaxis]
-X_valid_msa1 = np.repeat(X_valid_msa1, 50, axis = 1)
-y_pred_msa1_s2s = model_LSTM.predict(X_valid_msa1)
-RMSE_msa1_s2s = np.sqrt(mean_squared_error(Y_valid.ravel(), y_pred_msa1_s2s.ravel()))
+X_valid_msa = X_valid[:, 0, np.newaxis]
+X_valid_msa = np.repeat(X_valid_msa, 50, axis = 1)
+y_msa_rep = model_LSTM.predict(X_valid_msa)
+RMSE_msa1 = np.sqrt(mean_squared_error(Y_valid.ravel(), y_msa_rep.ravel()))
 print(f'Validation score: {RMSE_msa1_s2s}')
 
 # Viz
@@ -156,12 +156,17 @@ ax.legend()
 X_new_msa = X_new[:, 0, np.newaxis]
 def msa_iterator(X, Y, n_steps, model, option):
     """
-    Multistep-ahead iterator:
-    X - inputs
-    Y - outputs
-    model - model e.g. LSTM
-    option - 'continuous' means sequential without replacement, whilst 'sequential' 
-             means continuous with replacement. 
+    Multistep-ahead iterator. 
+    
+    Arguments:
+        X - inputs
+        Y - outputs
+        model - model e.g. LSTM
+        option - 'continuous' means sequential without replacement, whilst 'sequential' 
+                 means continuous with replacement. 
+             
+    Returns:
+        Y - updated output array
     """
     if option == 'continuous':
         for i in range(n_steps):
@@ -177,13 +182,13 @@ def msa_iterator(X, Y, n_steps, model, option):
 
 
 ### Stateless
-Y_pred = np.zeros((1, n_steps, 1))
-Y_pred = msa_iterator(X_new_msa, Y_pred, n_steps, model_LSTM, 'continuous')
+y_msa_sless = np.zeros((1, n_steps, 1))
+y_msa_sless = msa_iterator(X_new_msa, y_msa_sless, n_steps, model_LSTM, 'continuous')
 
 # stateless viz
 fig, ax = plt.subplots()
 ax.plot(np.linspace(1,50,50), Y_new.ravel(), 'o-', label = 'target')
-ax.plot(np.linspace(1,50,50), Y_pred.ravel(), '*-', label = 'prediction')
+ax.plot(np.linspace(1,50,50), y_msa_sless.ravel(), '*-', label = 'prediction')
 ax.set_xlabel('t')
 ax.set_ylim([-1, 1])
 ax.set_ylabel('x(t)')
@@ -197,14 +202,14 @@ model_LSTM_II = Sequential([
                 LSTM(20, return_sequences = True, stateful = True,),
                 TimeDistributed(Dense(1, activation = 'linear'))])
 model_LSTM_II.set_weights(stateless_weights)
-Y_pred_II = np.zeros((1, n_steps, 1))
-Y_pred_II = msa_iterator(X_new_msa, Y_pred_II, n_steps, model_LSTM_II, 'sequential')
+y_msa_sful = np.zeros((1, n_steps, 1))
+y_msa_sful = msa_iterator(X_new_msa, y_msa_sful, n_steps, model_LSTM_II, 'sequential')
 
 # stateful viz
 fig, ax = plt.subplots()
 ax.plot(np.linspace(1,50,50), Y_new.ravel(), 'o-', label = 'target')
-ax.plot(np.linspace(1,50,50), Y_pred.ravel(), 'd-', label = 'prediction - stateless continuous')
-ax.plot(np.linspace(1,50,50), Y_pred_II.ravel(), '*-', label = 'prediction - stateful')
+ax.plot(np.linspace(1,50,50), y_msa_sless.ravel(), 'd-', label = 'prediction - stateless continuous')
+ax.plot(np.linspace(1,50,50), y_msa_sful.ravel(), '*-', label = 'prediction - stateful')
 ax.set_xlabel('t')
 ax.set_ylim([-1, 1])
 ax.set_ylabel('x(t)')
