@@ -76,10 +76,10 @@ decoder_train = np.concatenate((np.zeros((X_train.shape[0],1,1)), X_train[:,3:])
 model_ED.fit([encoder_train, decoder_train], Y_train, epochs = 10)
 
 # prediction on training sequence - treated as a singlestep-ahead prediction
-y_train_ed_s2s = model_ED.predict([encoder_train, decoder_train])
-y_train_ed_s2s = y_train_ed_s2s[:,:,0]
-RMSE_ed_s2s = np.sqrt(mean_squared_error(Y_train.ravel(), y_train_ed_s2s.ravel()))
-print(f'Training score across all timesteps: {RMSE_ed_s2s}')
+y_train_ed = model_ED.predict([encoder_train, decoder_train])
+y_train_ed = y_train_ed[:,:,0]
+RMSE_tr_ed = np.sqrt(mean_squared_error(Y_train.ravel(), y_train_ed.ravel()))
+print(f'Training score across all timesteps: {RMSE_tr_ed}')
 
 
 #%% Setup multistep-ahead prediction ED model and iterator function
@@ -147,6 +147,6 @@ ax.set_ylim([-1, 1])
 ax.set_ylabel('x(t)')
 ax.legend()  
     
-
+# FINDINGS 
 
 

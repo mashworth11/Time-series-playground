@@ -51,7 +51,7 @@ model.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
 model.fit(X_train, y_train, epochs = 10)
 y_val_s2v = model.predict(X_valid)
 RMSE_s2v = np.sqrt(mean_squared_error(y_valid, y_val_s2v)) # mse across batches for the next value in the sequence
-print(f'Validation score: {RMSE_s2v}')
+print(f'Validation score for last timestep using s2v RNN:: {RMSE_s2v}')
 
 
 #%% Generate time series data we can compare on for a seq2seq case
@@ -71,24 +71,32 @@ Y_test = Y[9000:]
 
 
 #%% Pt. II: Simple RNN - seq2seq
-# Predict at each step, trained and used as a seq2seq
-model_SRRN = Sequential([
+# Predict at each of the 50 steps, therefore trained and used as a seq2seq. Teacher forcing is implicit.
+model_RNN = Sequential([
              SimpleRNN(20, return_sequences = True, input_shape=[None, 1]),
              SimpleRNN(20, return_sequences = True), # return sequence states for every timestep in the sequence
              TimeDistributed(Dense(1))]) # apply dense to every timestep in the sequence
-model_SRRN.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
-model_SRRN.fit(X_train, Y_train, epochs = 10)
-y_val_s2s = model_SRRN.predict(X_valid)
-y_val_s2s = y_val_s2s[:,:,0]
-RMSE_s2s = np.sqrt(mean_squared_error(y_valid, y_val_s2s[:,-1]))
-print(f'Validation score for last timestep: {RMSE_s2s}')
-RMSE_s2s = np.sqrt(mean_squared_error(Y_valid.ravel(), y_val_s2s.ravel()))
-print(f'Validation score across all timesteps: {RMSE_s2s}')
+model_RNN.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
+model_RNN.fit(X_train, Y_train, epochs = 10)
 
-# viz
+# validation score on last timestep, to be compared with score from Pt. 1
+y_val_rnn = model_RNN.predict(X_valid)
+y_val_rnn = y_val_rnn[:,:,0]
+RMSE_rnn = np.sqrt(mean_squared_error(y_valid, y_val_rnn[:,-1]))
+print(f'Validation score for last timestep using s2s RNN: {RMSE_rnn}')
+
+# train and validation scores across all timesteps
+y_train_rnn = model_RNN.predict(X_train)
+y_train_rnn = y_train_rnn[:,:,0]
+RMSE_tr_rnn = np.sqrt(mean_squared_error(Y_train.ravel(), y_train_rnn.ravel()))
+print(f'Training score across all timesteps using RNN: {RMSE_tr_rnn}')
+RMSE_val_rnn = np.sqrt(mean_squared_error(Y_valid.ravel(), y_val_rnn.ravel()))
+print(f'Validation score across all timesteps using RNN: {RMSE_val_rnn}')
+
+# viz on D_new series data
 fig, ax = plt.subplots()
 ax.plot(np.linspace(1,50,50), Y_new.ravel(), 'o-', label = 'target')
-ax.plot(np.linspace(1,50,50), model_SRRN.predict(X_new).ravel(), '*-', label = 'prediction')
+ax.plot(np.linspace(1,50,50), model_RNN.predict(X_new).ravel(), '*-', label = 'prediction')
 axs[i].set_xlabel('t')
 axs[0].set_ylim([-1, 1])
 axs[0].set_ylabel('x(t)')
@@ -96,7 +104,7 @@ ax.legend()
 
 
 #%% Pt. III: LSTM - seq2seq
-# Predict at each step, trained and used as a seq2seq. Teacher forcing is implicit.
+# Predict at each step, trained and used as a seq2seq. Again, teacher forcing is implicit.
 model_LSTM = Sequential([
              LSTM(20, return_sequences = True, input_shape=[None, 1]),
              LSTM(20, return_sequences = True),
@@ -104,17 +112,17 @@ model_LSTM = Sequential([
 model_LSTM.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
 model_LSTM.fit(X_train, Y_train, epochs = 10)
 
-# use ground truths from previous timesteps as inputs
-y_train_lstm_s2s = model_LSTM.predict(X_train)
-y_train_lstm_s2s = y_train_lstm_s2s[:,:,0]
-RMSE_lstm_s2s = np.sqrt(mean_squared_error(Y_train.ravel(), y_train_lstm_s2s.ravel()))
-print(f'Training score across all timesteps: {RMSE_lstm_s2s}')
-y_val_lstm_s2s = model_LSTM.predict(X_valid)
-y_val_lstm_s2s = y_val_lstm_s2s[:,:,0]
-RMSE_lstm_s2s = np.sqrt(mean_squared_error(Y_valid.ravel(), y_val_lstm_s2s.ravel()))
-print(f'Validation score across all timesteps: {RMSE_lstm_s2s}')
+# train and validation scores across all timesteps
+y_train_lstm = model_LSTM.predict(X_train)
+y_train_lstm = y_train_lstm[:,:,0]
+RMSE_tr_lstm = np.sqrt(mean_squared_error(Y_train.ravel(), y_train_lstm.ravel()))
+print(f'Training score across all timesteps using LSTM: {RMSE_tr_lstm}')
+y_val_lstm = model_LSTM.predict(X_valid)
+y_val_lstm = y_val_lstm[:,:,0]
+RMSE_val_lstm = np.sqrt(mean_squared_error(Y_valid.ravel(), y_val_lstm.ravel()))
+print(f'Validation score across all timesteps using LSTM: {RMSE_val_lstm}')
 
-# viz
+# viz on D_new series data
 fig, ax = plt.subplots()
 ax.plot(np.linspace(1,50,50), Y_new.ravel(), 'o-', label = 'target')
 ax.plot(np.linspace(1,50,50), model_LSTM.predict(X_new).ravel(), '*-', label = 'prediction')
@@ -122,7 +130,6 @@ ax.set_xlabel('t')
 ax.set_ylim([-1, 1])
 ax.set_ylabel('x(t)')
 ax.legend()
-ax.set_title('Predictions with groundtruth inputs')
 
 
 #%% Pt. IV: LSTM - Iterative seq., i.e. using predictions from previous timesteps as inputs
@@ -134,10 +141,10 @@ ax.set_title('Predictions with groundtruth inputs')
 X_valid_msa = X_valid[:, 0, np.newaxis]
 X_valid_msa = np.repeat(X_valid_msa, 50, axis = 1)
 y_msa_rep = model_LSTM.predict(X_valid_msa)
-RMSE_msa1 = np.sqrt(mean_squared_error(Y_valid.ravel(), y_msa_rep.ravel()))
-print(f'Validation score: {RMSE_msa1_s2s}')
+RMSE_msa_rep = np.sqrt(mean_squared_error(Y_valid.ravel(), y_msa_rep.ravel()))
+print(f'Validation score across all timesteps by repeating the input: {RMSE_msa_rep}')
 
-# Viz
+# viz on D_new series data
 X_new_msa = X_new[:, 0, np.newaxis]
 X_new_msa = np.repeat(X_new_msa, 50, axis = 1)
 fig, ax = plt.subplots()
@@ -151,9 +158,8 @@ ax.legend()
 # DOESN'T SEEM TO WORK TOO WELL (unless I'm doing something wrong, which could also be a possibility)
 
 
-# (2) Iterative approaches: stateless vs stateful
+#%% (2) Iterative approaches: stateless vs stateful
 # Looper
-X_new_msa = X_new[:, 0, np.newaxis]
 def msa_iterator(X, Y, n_steps, model, option):
     """
     Multistep-ahead iterator. 
@@ -162,54 +168,81 @@ def msa_iterator(X, Y, n_steps, model, option):
         X - inputs
         Y - outputs
         model - model e.g. LSTM
-        option - 'continuous' means sequential without replacement, whilst 'sequential' 
-                 means continuous with replacement. 
+        option - 'continuous' means iteration without replacement, whilst 'sequential' 
+                 means iteration with replacement. 
              
     Returns:
         Y - updated output array
     """
+    X = X.copy()
+    Y = Y.copy()
     if option == 'continuous':
-        for i in range(n_steps):
+        for j in range(n_steps):
             prediction = model.predict(X)
-            Y[:, i] = prediction[:, -1, np.newaxis]
-            X = np.concatenate([X, Y[:, i, np.newaxis]], axis = 1)
+            Y[:, j, np.newaxis] = prediction[:, -1, np.newaxis]
+            X = np.concatenate([X, Y[:, j, np.newaxis]], axis = 1)
     elif option == 'sequential':
-        for i in range(n_steps):
-            prediction = model.predict(X)
-            Y[:, i] = prediction[:,-1, np.newaxis]
-            X = Y[:, i, np.newaxis]
+        for i in range(X.shape[0]):
+            X_seq = X[i, 0, np.newaxis, np.newaxis]
+            for j in range(n_steps):
+                prediction = model.predict(X_seq)
+                Y[i, j, np.newaxis] = prediction[:, -1, np.newaxis]
+                X_seq = Y[i, j, np.newaxis, np.newaxis]
+            model.reset_states()  
     return Y
 
 
 ### Stateless
-y_msa_sless = np.zeros((1, n_steps, 1))
-y_msa_sless = msa_iterator(X_new_msa, y_msa_sless, n_steps, model_LSTM, 'continuous')
+# train and validation scores across all timesteps
+y_tr_msa_stl = msa_iterator(X_train[:, 0, np.newaxis], np.zeros(Y_train.shape), 
+                            n_steps, model_LSTM, 'continuous')
+RMSE_tr_msa_stl = np.sqrt(mean_squared_error(Y_train.ravel(), y_tr_msa_stl.ravel()))
+print(f'Training score across all timesteps using stateless: {RMSE_tr_msa_stl}')
+y_val_msa_stl = msa_iterator(X_valid[:, 0, np.newaxis], np.zeros(Y_valid.shape), 
+                             n_steps, model_LSTM, 'continuous')
+y_val_msa_stl = y_val_msa_stl[:,:,0]
+RMSE_val_msa_stl = np.sqrt(mean_squared_error(Y_valid.ravel(), y_val_msa_stl.ravel()))
+print(f'Validation score across all timesteps using stateless: {RMSE_val_msa_stl}')
 
-# stateless viz
+# stateless viz on D_new series data
+y_new_msa_stl = msa_iterator(X_new[:, 0, np.newaxis], np.zeros((1, n_steps, 1)), 
+                             n_steps, model_LSTM, 'continuous')
 fig, ax = plt.subplots()
 ax.plot(np.linspace(1,50,50), Y_new.ravel(), 'o-', label = 'target')
-ax.plot(np.linspace(1,50,50), y_msa_sless.ravel(), '*-', label = 'prediction')
+ax.plot(np.linspace(1,50,50), y_new_msa_stl.ravel(), '*-', label = 'prediction')
 ax.set_xlabel('t')
 ax.set_ylim([-1, 1])
 ax.set_ylabel('x(t)')
 ax.legend()
 
 
-### Stateful 
+#%% Stateful 
+# set stateful model
 stateless_weights = model_LSTM.get_weights()
-model_LSTM_II = Sequential([
+model_LSTM_stf = Sequential([
                 LSTM(20, return_sequences = True, stateful = True, batch_input_shape=[1, None, 1]),
                 LSTM(20, return_sequences = True, stateful = True,),
                 TimeDistributed(Dense(1, activation = 'linear'))])
-model_LSTM_II.set_weights(stateless_weights)
-y_msa_sful = np.zeros((1, n_steps, 1))
-y_msa_sful = msa_iterator(X_new_msa, y_msa_sful, n_steps, model_LSTM_II, 'sequential')
+model_LSTM_stf.set_weights(stateless_weights)
 
-# stateful viz
+# train and validation scores across all timesteps
+y_tr_msa_stf = msa_iterator(X_train[:, 0, np.newaxis], np.zeros(Y_train.shape), 
+                            n_steps, model_LSTM_stf, 'sequential')
+RMSE_tr_msa_stf = np.sqrt(mean_squared_error(Y_train.ravel(), y_tr_msa_stf.ravel()))
+print(f'Training score across all timesteps using stateful: {RMSE_tr_msa_stf}')
+y_val_msa_stf = msa_iterator(X_valid[:, 0, np.newaxis], np.zeros(Y_valid.shape), 
+                             n_steps, model_LSTM_stf, 'sequential')
+y_val_msa_stf = y_val_msa_stf[:,:,0]
+RMSE_val_msa_stf = np.sqrt(mean_squared_error(Y_valid.ravel(), y_val_msa_stf.ravel()))
+print(f'Validation score across all timesteps using stateful: {RMSE_val_msa_stf}')
+
+# stateful viz on D_new series data
+y_new_msa_stf = msa_iterator(X_new[:, 0, np.newaxis], np.zeros((1, n_steps, 1)), 
+                             n_steps, model_LSTM_stf, 'sequential')
 fig, ax = plt.subplots()
 ax.plot(np.linspace(1,50,50), Y_new.ravel(), 'o-', label = 'target')
-ax.plot(np.linspace(1,50,50), y_msa_sless.ravel(), 'd-', label = 'prediction - stateless continuous')
-ax.plot(np.linspace(1,50,50), y_msa_sful.ravel(), '*-', label = 'prediction - stateful')
+ax.plot(np.linspace(1,50,50), y_new_msa_stl.ravel(), 'd-', label = 'prediction - stateless continuous')
+ax.plot(np.linspace(1,50,50), y_new_msa_stf.ravel(), '*-', label = 'prediction - stateful')
 ax.set_xlabel('t')
 ax.set_ylim([-1, 1])
 ax.set_ylabel('x(t)')
@@ -219,6 +252,8 @@ ax.legend()
 # FINDINGS - so we found that continuous LSTM is equivalent to a stateful sequential LSTM! This is useful!
 # A good next experiment would be to see if we could get better performance by using three terms for an
 # initial prediction instead of one. That is exactly what we will do next.
+
+# stateful is also UNBELIEVABLY slow, because of loops
 
 
 
