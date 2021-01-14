@@ -99,7 +99,6 @@ decoder_model = keras.Model([decoder_inputs] + decoder_states_inputs,
                             [decoder_outputs] + decoder_states)
 
 
-X_new_msa = X_new[:, 0, np.newaxis]
 def msa_ED_iterator(X, Y, num_steps, encoder_model, decoder_model):
     """
     Multistep-ahead encoder-decoder iterator. 
@@ -113,12 +112,14 @@ def msa_ED_iterator(X, Y, num_steps, encoder_model, decoder_model):
     Returns:
         Y - updated output array
     """
+    X = X.copy()
+    Y = Y.copy()
     states = encoder_model.predict(X)
     decoder_input = np.zeros((X.shape[0], 1, 1))
     for i in range(num_steps):
         output, h, c = decoder_model.predict([decoder_input] + states)
-        Y[:, i] = output[:, -1, np.newaxis]
-        decoder_input = Y[:, i]
+        Y[:, i, np.newaxis] = output[:, -1, np.newaxis]
+        decoder_input = Y[:, i, np.newaxis]
         states = [h, c]   
     return Y
         
@@ -132,21 +133,31 @@ for step_ahead in range(3, 3 + 1):
     Y_new[:, :, step_ahead - 3] = new_series[:, step_ahead:step_ahead + n_steps, 0]
 encoder_newin = X_new[:,0:3]
 
-y_msa_ED = np.zeros((1, n_steps, 1))
-y_msa_ED = msa_ED_iterator(encoder_newin, y_msa_ED, n_steps, encoder_model, decoder_model)
-y_msa_LSTM = np.zeros((1, n_steps, 1))
-y_msa_LSTM = msa_iterator(encoder_newin[:, -1, np.newaxis], y_msa_LSTM, n_steps, model_LSTM, 'continuous') # taken from rnn script
+# train and validation scores across all timesteps with the iterator
+y_tr_msa_ed = msa_ED_iterator(X_train[:, 0:3], np.zeros(Y_train.shape), 
+                              n_steps, encoder_model, decoder_model)
+RMSE_tr_msa_ed = np.sqrt(mean_squared_error(Y_train.ravel(), y_tr_msa_ed.ravel()))
+print(f'Training score across all timesteps using encoder-decoder LSTM: {RMSE_tr_msa_ed}')
+y_val_msa_ed = msa_ED_iterator(X_valid[:, 0:3], np.zeros(Y_valid.shape), 
+                               n_steps, encoder_model, decoder_model)
+y_val_msa_ed = y_val_msa_ed[:,:,0]
+RMSE_val_msa_ed = np.sqrt(mean_squared_error(Y_valid.ravel(), y_val_msa_ed.ravel()))
+print(f'Validation score across all timesteps using encoder-decoder LSTM: {RMSE_val_msa_ed}')
     
 # viz
+y_new_msa_ed = msa_ED_iterator(encoder_newin, np.zeros((1, n_steps, 1)), n_steps, encoder_model, decoder_model)
+y_new_msa_stl = msa_iterator(encoder_newin[:, -1, np.newaxis], np.zeros((1, n_steps, 1)), n_steps, model_LSTM, 'continuous') # taken from rnn script
 fig, ax = plt.subplots()
 ax.plot(np.linspace(1,50,50), Y_new.ravel(), 'o-', label = 'target')
-ax.plot(np.linspace(1,50,50), y_msa_ED.ravel(), 'd-', label = 'prediction-ED')
-ax.plot(np.linspace(1,50,50), y_msa_LSTM.ravel(), '*-', label = 'prediction-LSTM')
+ax.plot(np.linspace(1,50,50), y_new_msa_ed.ravel(), 'd-', label = 'prediction: ED')
+ax.plot(np.linspace(1,50,50), y_new_msa_stl.ravel(), '*-', label = 'prediction: stateless LSTM')
 ax.set_xlabel('t')
 ax.set_ylim([-1, 1])
 ax.set_ylabel('x(t)')
 ax.legend()  
     
-# FINDINGS 
+# FINDINGS - Generally, the encoder-decoder, gives better early time performance (qualitatively) 
+# compared to the iterative LSTM. This seems reasonable given that we are encoding with three terms
+# whereas the iterative LSTM starts from just one term. s
 
 
