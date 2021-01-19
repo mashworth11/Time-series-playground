@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
+import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import LSTM

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
+import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import SimpleRNN
@@ -110,7 +111,7 @@ model_LSTM = Sequential([
              LSTM(20, return_sequences = True),
              TimeDistributed(Dense(1, activation = 'linear'))])
 model_LSTM.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
-model_LSTM.fit(X_train, Y_train, epochs = 10)
+model_LSTM.fit(X_train, Y_train, epochs = 10, batch_size = 32) # here batch_size specifies no. of seqeuences to take in per update
 
 # train and validation scores across all timesteps
 y_train_lstm = model_LSTM.predict(X_train)
@@ -181,6 +182,8 @@ def msa_iterator(X, Y, n_steps, model, option):
             prediction = model.predict(X)
             Y[:, j, np.newaxis] = prediction[:, -1, np.newaxis]
             X = np.concatenate([X, Y[:, j, np.newaxis]], axis = 1)
+            X = tf.convert_to_tensor(X) # used here to avoid rebuilding a new graph due to changing input shape 
+                                        # see https://stackoverflow.com/questions/58972225/tensorflow2-warning-using-tffunction
     elif option == 'sequential':
         for i in range(X.shape[0]):
             X_seq = X[i, 0, np.newaxis, np.newaxis]
