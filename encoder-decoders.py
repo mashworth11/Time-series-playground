@@ -16,7 +16,7 @@ from tensorflow.keras.layers import LSTM
 from tensorflow.keras.optimizers import Adam
 
 
-#%% Generate sequence data. We want to generate in such a way that we have 3 initial
+#%% Generate sequence data. We want to generate it in such a way that we have 3 initial
 # steps being used to make the prediction from time t=0 to t+1. 
 def generate_time_series(batch_size, n_steps):
     # batch_size = number of time series
@@ -52,42 +52,53 @@ axs[0].set_ylim([-1, 1])
 axs[0].set_ylabel('x(t)')
 
 
-#%% Encoder-decoder seq2seq wrapper (Hands on Machine Learning pg. 545)
+#%% Encoder-decoder seq2seq wrapper ((pg. 544-545 in HOML))
 # also use info. from https://www.angioi.com/time-series-encoder-decoder-tensorflow/, 
 # https://blog.keras.io/a-ten-minute-introduction-to-sequence-to-sequence-learning-in-keras.html
 encoder_inputs = keras.layers.Input(shape = [None, 1])
 decoder_inputs = keras.layers.Input(shape = [None, 1])
 
 # encoder 
-encoder = LSTM(20, return_state = True)
+encoder = LSTM(units=20, return_state = True)
 encoder_ouputs, state_h, state_c = encoder(encoder_inputs)
 encoder_states = [state_h, state_c]
 
 # decoder
-decoder = LSTM(20, return_sequences=True, return_state=True)
+decoder = LSTM(units=20, return_sequences=True, return_state=True)
 decoder_outputs, _, _ = decoder(inputs = decoder_inputs, initial_state = encoder_states)
-decoder_dense = Dense(1, activation='linear')
+decoder_dense = Dense(units=1, activation='linear')
 decoder_outputs = decoder_dense(decoder_outputs)
 
 # define and train encoder-decoder model
 model_ED = keras.Model(inputs = [encoder_inputs, decoder_inputs], outputs = decoder_outputs)
-model_ED.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
+model_ED.compile(loss='mse', optimizer=Adam(lr=0.01))
 encoder_train = X_train[:,0:3]
 decoder_train = np.concatenate((np.zeros((X_train.shape[0],1,1)), X_train[:,3:]), axis = 1)
-model_ED.fit([encoder_train, decoder_train], Y_train, epochs = 10)
+model_ED.fit([encoder_train, decoder_train], Y_train, epochs = 10, batch_size = 32)
 
-# prediction on training sequence - treated as a singlestep-ahead prediction
+# prediction on training sequence - treated as a single-step ahead prediction
 y_train_ed = model_ED.predict([encoder_train, decoder_train])
 y_train_ed = y_train_ed[:,:,0]
 RMSE_tr_ed = np.sqrt(mean_squared_error(Y_train.ravel(), y_train_ed.ravel()))
-print(f'Training score across all timesteps: {RMSE_tr_ed}')
+print(f'Training score across all timesteps as an SSA: {RMSE_tr_ed}')
+
+# visualise
+fig, axs = plt.subplots(1, 3, sharey = True)
+for i in range(3):
+    axs[i].plot(np.linspace(0,51,52), X_train[i].ravel(), 'x-', label = 'input')
+    axs[i].plot(np.linspace(3,52,50), Y_train[i].ravel(), 'o:', label = 'target')
+    axs[i].plot(np.linspace(3,52,50), y_train_ed[i].ravel(), 'd', label = 'ssa prediction')
+    axs[i].set_xlabel('t')
+    axs[i].legend()
+axs[0].set_ylim([-1, 1])
+axs[0].set_ylabel('x(t)')
 
 
 #%% Setup multistep-ahead prediction ED model and iterator function
 # setup encoder model to output states given input sequence using trained encoder above
 encoder_model = keras.Model(encoder_inputs, encoder_states) 
 
-# create Tensorflow decoder objects for multistep-ahead prediction based on trained decoder above 
+# create Tensorflow decoder objects for multi-step ahead prediction based on trained decoder above 
 decoder_state_input_h = keras.layers.Input(shape=(20,))
 decoder_state_input_c = keras.layers.Input(shape=(20,))
 decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
@@ -102,11 +113,12 @@ decoder_model = keras.Model([decoder_inputs] + decoder_states_inputs,
 
 def msa_ED_iterator(X, Y, num_steps, encoder_model, decoder_model):
     """
-    Multistep-ahead encoder-decoder iterator. 
+    Multi-step ahead encoder-decoder iterator. 
     
     Arguments:
         X - inputs
         Y - outputs
+        n_steps - number of timesteps
         encoder_model - encoder
         decoder_model - decoder
              

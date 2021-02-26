@@ -42,14 +42,14 @@ axs[0].set_ylim([-1, 1])
 axs[0].set_ylabel('x(t)')
 
 
-#%% Pt. I: Simple RNN - seq2vec
+#%% Pt. I: Simple RNN - seq2vec (pg. 506-508 in HOML)
 # Use 50 steps to predict 1 step into the future, trained and used as a seq2vec
 model = Sequential([
-        SimpleRNN(20, return_sequences = True, input_shape=[None, 1]),
-        SimpleRNN(20),
-        Dense(1)])
+        SimpleRNN(units=20, return_sequences = True, input_shape=[None, 1]),
+        SimpleRNN(units=20),
+        Dense(units=1)])
 model.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
-model.fit(X_train, y_train, epochs = 10)
+model.fit(X_train, y_train, epochs=10, batch_size=32)
 y_val_s2v = model.predict(X_valid)
 RMSE_s2v = np.sqrt(mean_squared_error(y_valid, y_val_s2v)) # mse across batches for the next value in the sequence
 print(f'Validation score for last timestep using s2v RNN:: {RMSE_s2v}')
@@ -71,14 +71,14 @@ Y_valid = Y[7000:9000]
 Y_test = Y[9000:]
 
 
-#%% Pt. II: Simple RNN - seq2seq
+#%% Pt. II: Simple RNN - seq2seq (pg. 509-510 in HOML)
 # Predict at each of the 50 steps, therefore trained and used as a seq2seq. Teacher forcing is implicit.
 model_RNN = Sequential([
-             SimpleRNN(20, return_sequences = True, input_shape=[None, 1]),
-             SimpleRNN(20, return_sequences = True), # return sequence states for every timestep in the sequence
-             TimeDistributed(Dense(1))]) # apply dense to every timestep in the sequence
+             SimpleRNN(units=20, return_sequences = True, input_shape=[None, 1]),
+             SimpleRNN(units=20, return_sequences = True), # return sequence states for every timestep in the sequence
+             TimeDistributed(Dense(units=1))]) # apply dense to every timestep in the sequence
 model_RNN.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
-model_RNN.fit(X_train, Y_train, epochs = 10)
+model_RNN.fit(X_train, Y_train, epochs=10, batch_size=32)
 
 # validation score on last timestep, to be compared with score from Pt. 1
 y_val_rnn = model_RNN.predict(X_valid)
@@ -104,14 +104,14 @@ axs[0].set_ylabel('x(t)')
 ax.legend()
 
 
-#%% Pt. III: LSTM - seq2seq
+#%% Pt. III: LSTM - seq2seq (pg. 514-515 in HOML)
 # Predict at each step, trained and used as a seq2seq. Again, teacher forcing is implicit.
 model_LSTM = Sequential([
-             LSTM(20, return_sequences = True, input_shape=[None, 1]),
-             LSTM(20, return_sequences = True),
+             LSTM(units=20, return_sequences = True, input_shape=[None, 1]),
+             LSTM(units=20, return_sequences = True),
              TimeDistributed(Dense(1, activation = 'linear'))])
 model_LSTM.compile(loss = 'mse', optimizer = Adam(lr = 0.01))
-model_LSTM.fit(X_train, Y_train, epochs = 10, batch_size = 32) # here batch_size specifies no. of seqeuences to take in per update
+model_LSTM.fit(X_train, Y_train, epochs=10, batch_size=32) # here batch_size specifies no. of seqeuences to take in per update
 
 # train and validation scores across all timesteps
 y_train_lstm = model_LSTM.predict(X_train)
@@ -168,6 +168,7 @@ def msa_iterator(X, Y, n_steps, model, option):
     Arguments:
         X - inputs
         Y - outputs
+        n_steps - number of timesteps
         model - model e.g. LSTM
         option - 'continuous' means iteration without replacement, whilst 'sequential' 
                  means iteration with replacement. 
